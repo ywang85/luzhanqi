@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent" >
+    <com.example.wyj.luzhanqi.LuZhanQiView
+        android:id="@+id/luzhanqi_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" 
+        android:textSize="16sp" />
+
+	<RelativeLayout
+		xmlns:android="http://schemas.android.com/apk/res/android"
+		android:layout_width="match_parent"
+		android:layout_height="match_parent"
+		android:paddingLeft="50dp"
+		android:paddingRight="50dp"
+		android:paddingTop="64dp"
+		android:paddingBottom="64dp"
+		>
+		<ListView
+			android:id="@+id/lineup_listview"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:focusable="true"
+			android:fadingEdge="none"
+			>
+		</ListView>
+
+		<TextView android:id="@+id/text"
+			android:text="@string/blank_info"
+			android:visibility="visible"
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:layout_centerInParent="true"
+			android:gravity="center_horizontal"
+			android:textColor="#ff000000"
+			/>
+	</RelativeLayout>
+</FrameLayout>
