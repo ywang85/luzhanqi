@@ -2,6 +2,7 @@ package com.example.wyj.luzhanqi.game;
 
 import android.util.Log;
 
+import com.example.wyj.luzhanqi.LuZhanQiView;
 import com.example.wyj.luzhanqi.game.ai.Movement;
 
 import java.io.IOException;
@@ -14,6 +15,8 @@ import java.util.Vector;
  */
 
 public class Board implements Cloneable{
+    public static String chessName = "";
+    private byte killed = 0;
     // Array Size of the board
     public static final int BOARD_WIDTH = 5;
     public static final int BOARD_HEIGHT = 12;
@@ -180,16 +183,17 @@ public class Board implements Cloneable{
      * @param c
      */
     public boolean setFromTo(int whosTurn, Coordinate c) {
-        if (from == null && whosTurn == Pieces.getLocated(boardArea[c.y][c.x])){
+        if (from == null && whosTurn == Pieces.getLocated(boardArea[c.y][c.x])){ // 是人，从to到from->c
             from = c;
             to = null;
+            Log.d(this.getClass().getName(), from.x + " " + from.y + " case 1");
             return true;
-        } else if (from == null && whosTurn != Pieces.getLocated(boardArea[c.y][c.x])){
+        } else if (from == null && whosTurn != Pieces.getLocated(boardArea[c.y][c.x])){ // 不是人
             to = null;
             return false;
         } else if (to == null) {
             int x = from.x, y = from.y;
-            int x0= c.x, y0 = c.y;
+            int x0 = c.x, y0 = c.y;
             // Check if user changes the "from" selection
             if (Pieces.sameLocation( boardArea[y0][x0], boardArea[y][x])){
                 from = c;
@@ -198,11 +202,13 @@ public class Board implements Cloneable{
             }
             return true;
         } else {
-            // both are not null. It's not allowed to come here
+//             both are not null.
             Log.e(this.getClass().getName(), "// both are not null. It's not allowed to come here!");
             return false;
         }
     }
+
+
 
     /**
      * Try to move after path-finding
@@ -267,10 +273,18 @@ public class Board implements Cloneable{
             byte soldier0 = Pieces.getPureType(boardArea[y0][x0]);
             byte soldier1 = Pieces.getPureType(boardArea[y][x]);
             if (soldier0 < soldier1) {
+                if (LuZhanQiView.getWhosTurn() == Pieces.AI_TAG) {
+                    killed = soldier1;
+                    chessName = Pieces.pieceTitle(killed);
+                }
                 return KILL;
             } else if (soldier0 == soldier1) {
                 return EQUAL;
             } else {
+                if (LuZhanQiView.getWhosTurn() == Pieces.MAN_TAG) {
+                    killed = soldier0;
+                    chessName = Pieces.pieceTitle(killed);
+                }
                 return KILLED;
             }
         }
@@ -668,10 +682,10 @@ public class Board implements Cloneable{
      *
      * @param args
      */
-    public static void main(String[] args) {
-        Board b = new Board();
-        b.printStations();
-    }
+//    public static void main(String[] args) {
+//        Board b = new Board();
+//        b.printStations();
+//    }
     /**
      * test
      */
@@ -707,3 +721,6 @@ public class Board implements Cloneable{
         return bclone;
     }
 }
+
+
+

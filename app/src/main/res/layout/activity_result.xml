@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:orientation="vertical"
+    android:padding="16dp">
+    <TextView
+        android:id="@+id/winOrLose"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        tools:text="You win!"
+        android:textSize="36dp"
+        android:textColor="@color/colorAccent"
+        android:layout_gravity="center"/>
+    <TextView
+        android:id="@+id/result"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        tools:text="@string/result"
+        android:textSize="24dp"
+        android:layout_gravity="center"/>
+</LinearLayout>

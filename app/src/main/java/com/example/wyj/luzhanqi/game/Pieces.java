@@ -1,5 +1,6 @@
 package com.example.wyj.luzhanqi.game;
 
+
 /**
  * Created by wyj on 2018/1/23.
  */
@@ -37,6 +38,110 @@ public class Pieces {
     public static final int MAN_TAG = 0;
     public static final int AI_TAG = 1;
     public static final int UNKNOWN_TAG = -1;
+
+    /**
+     * Solider type <--> caption
+     */
+    public static String pieceTitle(byte type) {
+        String title = "n/a";
+        switch (type) {
+            case FLAG_S:
+                //军棋
+                title = "Flag";
+                break;
+            case FLAG_N:
+                title = "AIFlag";
+                break;
+            case MINE_S:
+                //地雷
+                title = "LandM";
+                break;
+            case MINE_N:
+                title = "AILandM";
+                break;
+            case BOMB_S:
+                //炸弹
+                title = "Bomb";
+                break;
+            case BOMB_N:
+                //炸弹
+                title = "AIBomb";
+                break;
+            case SILING_S:
+                //司令
+                title = "F Mar";
+                break;
+            case SILING_N:
+                //司令
+                title = "AIF Mar";
+                break;
+            case JUNZHANG_S:
+                //军长
+                title = "Gener";
+                break;
+            case JUNZHANG_N:
+                //军长
+                title = "AIGener";
+                break;
+            case SHIZHANG_S:
+                //师长
+                title = "M Gen";
+                break;
+            case SHIZHANG_N:
+                //师长
+                title = "AIM Gen";
+                break;
+            case LVZHANG_S:
+                //旅长
+                title = "Briga";
+                break;
+            case LVZHANG_N:
+                //旅长
+                title = "AIBriga";
+                break;
+            case TUANZHANG_S:
+                //团长
+                title = "Colon";
+                break;
+            case TUANZHANG_N:
+                //团长
+                title = "AIColon";
+                break;
+            case YINGZHANG_S:
+                //营长
+                title = "Major";
+                break;
+            case YINGZHANG_N:
+                //营长
+                title = "AIMajor";
+                break;
+            case LIANZHANG_S:
+                //连长
+                title = "Capta";
+                break;
+            case LIANZHANG_N:
+                //连长
+                title = "AICapta";
+                break;
+            case PAIZHANG_S:
+                //排长
+                title = "Lieut";
+                break;
+            case PAIZHANG_N:
+                //排长
+                title = "AILieut";
+                break;
+            case GONGBING_S:
+                //工兵
+                title = "Engin";
+                break;
+            case GONGBING_N:
+                //工兵
+                title = "AIEngin";
+                break;
+        }
+        return title;
+    }
 
     /**
      * Pieces are the same player
@@ -93,51 +198,6 @@ public class Pieces {
         }
     }
 
-    /**
-     * Solider type <--> caption
-     */
-    public static String pieceTitle(byte type) {
-        String title = "n/a";
-        switch (getPureType(type)) {
-            case FLAG_S:
-                title = "军旗";
-                break;
-            case MINE_S:
-                title = "地雷";
-                break;
-            case BOMB_S:
-                title = "炸弹";
-                break;
-            case SILING_S:
-                title = "司令";
-                break;
-            case JUNZHANG_S:
-                title = "军长";
-                break;
-            case SHIZHANG_S:
-                title = "师长";
-                break;
-            case LVZHANG_S:
-                title = "旅长";
-                break;
-            case TUANZHANG_S:
-                title = "团长";
-                break;
-            case YINGZHANG_S:
-                title = "营长";
-                break;
-            case LIANZHANG_S:
-                title = "连长";
-                break;
-            case PAIZHANG_S:
-                title = "排长";
-                break;
-            case GONGBING_S:
-                title = "工兵";
-                break;
-        }
-        return title;
-    }
 
 
 }

@@ -1,36 +1,68 @@
 package com.example.wyj.luzhanqi;
 
+import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.media.MediaPlayer;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
+import android.support.v4.view.GestureDetectorCompat;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.GestureDetector;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
-import android.view.View;
+import android.widget.Toast;
 
 import com.example.wyj.luzhanqi.game.Board;
 import com.example.wyj.luzhanqi.game.Coordinate;
+import com.example.wyj.luzhanqi.game.Pair;
 import com.example.wyj.luzhanqi.game.Pieces;
 import com.example.wyj.luzhanqi.game.ai.ABSearchRunnable;
 
 import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 
 /**
  * Created by wyj on 2018/1/23.
  */
 
-public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback {
+public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback, GestureDetector.OnGestureListener {
+
+    private final int XPOS = 0;
+    private final int YPOS = 100;
+    public static Map<String, Pair> order = new HashMap<>();
+    private GestureDetectorCompat mDetector;
+
+    public static int youKilled = 0;
+    public static int aiKilled = 0;
+    public static final String RESULTS = "RESULTS";
+    public boolean win = false;
+    // The width & height of the screen
+    private final int SCREEN_WIDTH, SCREEN_HEIGHT;
+    // Ratio - RECT_WIDTH/RECT_HEIGHT of the little rectangle.
+    // To draw the board fitting to the screen
+    private final double RATIO_RECT_W_H = 1.9d;
+    private final int RECT_WIDTH, RECT_HEIGHT;
+    // Border of the board on the screen
+    private final int X_OFFSET, Y_OFFSET;
+    private final int PIECE_WIDTH, PIECE_HEIGHT;
+    private static final int SAMPLE_LINEUP_MAX_INDEX = 60 ;
+    private GameThread gameThread;
+    private Board board = new Board();
+    public static int whosTurn = Pieces.MAN_TAG; // Check who's turn to move
+    private MediaPlayer mediaPlayer;
+
     protected class GameThread extends Thread {
         public static final int STATE_LINEUP = 1;
         //		public static final int STATE_READY = 2;
@@ -55,8 +87,7 @@ public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback 
         private boolean showTitle = false;
         private boolean showFlag = false;
 
-        public GameThread(SurfaceHolder surfaceHolder, Context context,
-                          Handler handler) {
+        public GameThread(SurfaceHolder surfaceHolder, Context context, Handler handler) {
             // get handles to some important objects
             mSurfaceHolder = surfaceHolder;
             mContext = context;
@@ -69,13 +100,24 @@ public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback 
             fontPaint.setColor(Color.BLACK);
             fontPaint.setTypeface(font);
             fontPaint.setAntiAlias(true);
+            fontPaint.setTextSize(16);
 
             Paint.FontMetrics fm = fontPaint.getFontMetrics();
             mFontHeight = fm.descent - fm.top - 4.0f;
             //Log.d(this.getClass().getName(), String.valueOf(fm.descent));
             //Log.d(this.getClass().getName(), String.valueOf(fm.top));
+        }
 
+        public Paint getPaint() {
+            return paint;
+        }
 
+        public void finishGame() {
+//            Log.d("end", "finish");
+            Activity activity = (Activity) getContext();
+            Intent intent = new Intent(activity, ResultActivity.class);
+            intent.putExtra(RESULTS, win);
+            activity.startActivity(intent);
         }
 
         /**
@@ -110,9 +152,14 @@ public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback 
             setWhosTurn(Pieces.MAN_TAG);
             setShowFlag(false);
             setMode(STATE_LINEUP);
+//            editLayout();
             //setMode(STATE_RUNNING);
             //setShowTitle(true);
         }
+
+//        private void editLayout() {
+//            222
+//        }
 
         /**
          * Start a fresh game
@@ -120,7 +167,7 @@ public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback 
         public void startGame(){
             if (mode == STATE_LINEUP) {
                 setMode(STATE_RUNNING);
-                playSound(R.raw.gamestart);
+//                playSound(R.raw.gamestart);
             }
         }
 
@@ -151,24 +198,52 @@ public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback 
                     if (!stillHasNext) { // the last Step
                         int moveAndAttackResult = board.getMoveAndAttackResult();
                         if (moveAndAttackResult == Board.AI_LOST) {
-                            playSound(R.raw.win);
+//                            playSound(R.raw.win);
                             setMode(STATE_WIN);
                             return;
                         } else if (moveAndAttackResult == Board.MAN_LOST) {
-                            playSound(R.raw.gameover);
+//                            playSound(R.raw.gameover);
                             setMode(STATE_LOSE);
                             return;
                         } else if (moveAndAttackResult == Board.KILL ) {
+                            if (whosTurn == Pieces.AI_TAG) {
+                                mHandler.post(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        Toast toast = Toast.makeText(getContext(), Board.chessName + " has been killed", Toast.LENGTH_SHORT);
+                                        toast.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL, XPOS, YPOS);
+                                        toast.show();
+                                    }
+                                });
+                                aiKilled++;
+                            } else {
+                                youKilled++;
+                            }
                             checkShowFlag();
-                            playSound(R.raw.kill);
+//                            playSound(R.raw.kill);
                         } else if (moveAndAttackResult == Board.KILLED ) {
+                            if (whosTurn == Pieces.AI_TAG) {
+                                youKilled++;
+                            } else {
+                                mHandler.post(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        Toast toast = Toast.makeText(getContext(), Board.chessName + " has been killed", Toast.LENGTH_SHORT);
+                                        toast.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL, XPOS, YPOS);
+                                        toast.show();
+                                    }
+                                });
+                                aiKilled++;
+                            }
                             checkShowFlag();
-                            playSound(R.raw.killed);
+//                            playSound(R.raw.killed);
                         } else if (moveAndAttackResult == Board.EQUAL ) {
+                            youKilled++;
+                            aiKilled++;
                             checkShowFlag();
-                            playSound(R.raw.equal);
+//                            playSound(R.raw.equal);
                         } else if (moveAndAttackResult == Board.MOVE ) {
-                            playSound(R.raw.move);
+//                            playSound(R.raw.move);
                         }
                         changeWhosTurn();
                     }
@@ -225,11 +300,13 @@ public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback 
 
             paint.setColor(Color.RED);
             if (from!=null) {
+//                Log.d("draw","from not null");
                 int tmpy = from.y < 6 ? (from.y+1) : (from.y+2);
                 c.drawRect(X_OFFSET + RECT_WIDTH / 2 + from.x* RECT_WIDTH - PIECE_WIDTH / 2 -1, Y_OFFSET + tmpy * RECT_HEIGHT - PIECE_HEIGHT / 2 -1,
                         X_OFFSET + RECT_WIDTH / 2 + from.x* RECT_WIDTH + PIECE_WIDTH / 2 +2, Y_OFFSET + tmpy * RECT_HEIGHT + PIECE_HEIGHT / 2 +2 , paint);
             }
             if (to!=null) {
+//                Log.d("draw", "to not null");
                 int tmpy = to.y < 6 ? (to.y+1) : (to.y+2);
                 c.drawRect(X_OFFSET + RECT_WIDTH / 2 + to.x* RECT_WIDTH - PIECE_WIDTH / 2 -1, Y_OFFSET + tmpy * RECT_HEIGHT - PIECE_HEIGHT / 2 -1 ,
                         X_OFFSET + RECT_WIDTH / 2 + to.x* RECT_WIDTH + PIECE_WIDTH / 2 +2, Y_OFFSET + tmpy * RECT_HEIGHT + PIECE_HEIGHT / 2 + 2 , paint);
@@ -261,7 +338,6 @@ public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback 
                         // Draw the Piece
                         c.drawRect(X_OFFSET + RECT_WIDTH / 2 + x* RECT_WIDTH - PIECE_WIDTH / 2, Y_OFFSET + tmpy * RECT_HEIGHT - PIECE_HEIGHT / 2,
                                 X_OFFSET + RECT_WIDTH / 2 + x* RECT_WIDTH + PIECE_WIDTH / 2, Y_OFFSET + tmpy * RECT_HEIGHT + PIECE_HEIGHT / 2, paint);
-
                         // Draw the Border of the piece
                         paint.setStyle(Paint.Style.STROKE);
                         paint.setColor(Color.BLACK);
@@ -291,6 +367,10 @@ public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback 
 
             // Roads
             paint.setColor(Color.BLACK);
+
+            c.drawText("hold chess to get more info", 20, 80, paint);
+
+            paint.setTextSize(40);
             paint.setStyle(Paint.Style.STROKE);
             for (int x = 0; x < 4; x++) {
                 for (int y = 0; y < 12; y++) {
@@ -377,6 +457,10 @@ public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback 
                             updatePhysics();
                         }
                         doDraw(canvas);
+                        if (mode == STATE_WIN || mode == STATE_LOSE) {
+
+                            surfaceReady = false;
+                        }
                     }
                 } finally {
                     if (canvas != null) {
@@ -399,18 +483,17 @@ public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback 
             synchronized (mSurfaceHolder) {
                 setMode(state, null);
             }
+
         }
 
         /**
          * Sets the game mode. That is, whether we are running, paused, in the
          * failure state, in the victory state, etc.
          *
-         * @param mode
-         *            one of the STATE_* constants
          * @param message
          *            string to add to screen or null
          */
-        public void setMode(int state, CharSequence message) {
+        public void setMode(final int state, final CharSequence message) {
 			/*
 			 * This method optionally can cause a text message to be displayed
 			 * to the user when the mode changes. Since the View that actually
@@ -423,41 +506,71 @@ public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback 
                 this.mode = state;
 
                 if (state == STATE_RUNNING) {
-                    Message msg = mHandler.obtainMessage();
-                    Bundle b = new Bundle();
-                    b.putString("text", "");
-                    b.putInt("viz", View.INVISIBLE);
-                    msg.setData(b);
-                    mHandler.sendMessage(msg);
+                    new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Message msg = new Message();
+                            msg.what = state;
+                            mHandler.sendMessage(msg);
+                        }
+                    }).start();
                 } else {
-                    Resources res = mContext.getResources();
-                    CharSequence str = "";
-                    // if (state == STATE_READY)
-                    // str = res.getText(R.string.mode_ready);
-                    // else if (state == STATE_PAUSE)
-                    // str = res.getText(R.string.mode_pause);
-                    // else if (state == STATE_LOSE)
-                    // str = res.getText(R.string.mode_lose);
-                    // else if (state == STATE_LEVELUPDATED)
-                    // str = res.getText(R.string.mode_levelupdated);
-
-                    if (state == STATE_LOSE){
-                        str = res.getText(R.string.victory);
+                    if (state == STATE_WIN){
+                        new Thread(new Runnable() {
+                            @Override
+                            public void run() {
+                                Message m = new Message();
+                                m.what = state;
+                                mHandler.sendMessage(m);
+                            }
+                        }).start();
                     } else if (state == STATE_LOSE){
-                        str = res.getText(R.string.failed);
+                        new Thread(new Runnable() {
+                            @Override
+                            public void run() {
+                                Message m = new Message();
+                                m.what = state;
+                                mHandler.sendMessage(m);
+                            }
+                        }).start();
                     }
-
-                    if (message != null) {
-                        str = message + "\n" + str;
-                    }
-
-                    Message msg = mHandler.obtainMessage();
-                    Bundle b = new Bundle();
-                    b.putString("text", str.toString());
-                    b.putInt("viz", View.VISIBLE);
-                    msg.setData(b);
-                    mHandler.sendMessage(msg);
                 }
+//                if (state == STATE_RUNNING) {
+//                    Message msg = mHandler.obtainMessage();
+//                    Bundle b = new Bundle();
+//                    b.putString("text", "");
+//                    b.putInt("viz", View.INVISIBLE);
+//                    msg.setData(b);
+//                    mHandler.sendMessage(msg);
+//                } else {
+//                    Resources res = mContext.getResources();
+//                    CharSequence str = "";
+//                    // if (state == STATE_READY)
+//                    // str = res.getText(R.string.mode_ready);
+//                    // else if (state == STATE_PAUSE)
+//                    // str = res.getText(R.string.mode_pause);
+//                    // else if (state == STATE_LOSE)
+//                    // str = res.getText(R.string.mode_lose);
+//                    // else if (state == STATE_LEVELUPDATED)
+//                    // str = res.getText(R.string.mode_levelupdated);
+//
+//                    if (state == STATE_LOSE) {
+//                        str = res.getText(R.string.victory);
+//                    } else if (state == STATE_LOSE) {
+//                        str = res.getText(R.string.failed);
+//                    }
+//
+//                    if (message != null) {
+//                        str = message + "\n" + str;
+//                    }
+//
+//                    Message msg = mHandler.obtainMessage();
+//                    Bundle b = new Bundle();
+//                    b.putString("text", str.toString());
+//                    b.putInt("viz", View.VISIBLE);
+//                    msg.setData(b);
+//                    mHandler.sendMessage(msg);
+//                }
             }
         }
 
@@ -561,22 +674,7 @@ public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback 
         }
     }
 
-    // The width & height of the screen
-    private final int SCREEN_WIDTH, SCREEN_HEIGHT;
-    // Ratio - RECT_WIDTH/RECT_HEIGHT of the little rectangle.
-    // To draw the board fitting to the screen
-    private final double RATIO_RECT_W_H = 1.9d;
-    private final int RECT_WIDTH, RECT_HEIGHT;
-    // Border of the board on the screen
-    private final int X_OFFSET, Y_OFFSET;
-    private final int PIECE_WIDTH, PIECE_HEIGHT;
-    private static final int SAMPLE_LINEUP_MAX_INDEX = 60 ;
-    private GameThread gameThread;
-    private Board board = new Board();
-    private int whosTurn = Pieces.MAN_TAG; // Check who's turn to move
-    private MediaPlayer mediaPlayer;
-
-    public LuZhanQiView(Context context, AttributeSet attrs) {
+    public LuZhanQiView(final Context context, AttributeSet attrs) {
         super(context, attrs);
         SurfaceHolder holder = getHolder();
         holder.addCallback(this);
@@ -603,18 +701,35 @@ public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback 
 
         PIECE_HEIGHT = RECT_HEIGHT * 3 / 4;
         PIECE_WIDTH = (int) (PIECE_HEIGHT * RATIO_RECT_W_H - 2);
-        Log.d(this.getClass().getName(), "PIECE_HEIGHT = " + PIECE_HEIGHT  +  "PIECE_WIDTH = " + PIECE_WIDTH );
 
         // create thread only; it's started in surfaceCreated()
         gameThread = new GameThread(holder, context, new Handler() {
             public void handleMessage(Message m) {
-                // mStatusText.setVisibility(m.getData().getInt("viz"));
-                // mStatusText.setText(m.getData().getString("text"));
+                switch (m.what){
+                    case GameThread.STATE_WIN:
+                        win = true;
+//                        Log.d("end", "win");
+                        gameThread.finishGame();
+                        break;
+                    case GameThread.STATE_LOSE:
+                        win = false;
+//                        Log.d("end", "lose");
+                        gameThread.finishGame();
+                        break;
+                    default:
+                        break;
+                }
+
             }
         });
         // make sure we get key events
         setFocusable(true);
     }
+
+//    private void gameEnd(int state) {
+//        Log.d("ends", ""+state);
+//        luZhanQiActivity.gameEnd(state);
+//    }
 
 
     @Override
@@ -622,7 +737,19 @@ public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback 
         gameThread.initGame();
         gameThread.setSurfaceReady(true);
         gameThread.start();
-
+        mDetector = new GestureDetectorCompat(getContext(), this);
+        order.put("Engin", new Pair("Engineer", 1));
+        order.put("Lieut", new Pair("Lieutenant", 2));
+        order.put("Capta", new Pair("Captain", 3));
+        order.put("Major", new Pair("Major", 4));
+        order.put("Colon", new Pair("Colonel", 5));
+        order.put("Briga", new Pair("Brigadier", 6));
+        order.put("M Gen", new Pair("Major General", 7));
+        order.put("Gener", new Pair("General", 8));
+        order.put("F Mar", new Pair("Field Marshal", 9));
+        order.put("Bomb", new Pair("Bomb", -1));
+        order.put("LandM", new Pair("LandMine", -1));
+        order.put("Flag", new Pair("Flag", -1));
     }
 
     /* Callback invoked when the surface dimensions change. */
@@ -656,51 +783,114 @@ public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback 
         }
     }
 
+    @Override
+    public boolean onDown(MotionEvent event) {
+        float fx = event.getX();
+        float fy = event.getY();
+        int recordX = -1, recordY = -1; // x,y coordinate on the board from motion event
+        // Convert from motionEvent x,y to the board coordinate
+        if (gameThread.getMode() == GameThread.STATE_RUNNING) {
+            for (int y = 0; y < Board.BOARD_HEIGHT; y++) {
+                for (int x = 0; x < Board.BOARD_WIDTH; x++) {
+                    int tmpy = y < 6 ? (y+1) : (y+2);
+                    if (fx >=  X_OFFSET + RECT_WIDTH / 2.0f + x* RECT_WIDTH - PIECE_WIDTH / 2.0f
+                            && fx <=  X_OFFSET + RECT_WIDTH / 2.0f + x* RECT_WIDTH + PIECE_WIDTH / 2.0f ){
+                        recordX = x;
+                    }
+                    if (fy >= Y_OFFSET + tmpy * RECT_HEIGHT - PIECE_HEIGHT / 2.0f
+                            && fy <= Y_OFFSET + tmpy * RECT_HEIGHT + PIECE_HEIGHT / 2.0f ){
+                        recordY = y;
+                    }
+                }
+            }
+            if (whosTurn == Pieces.MAN_TAG){
+                    // Valid x,y coordinate on the board
+                if (recordX != -1 && recordY != -1) {
+                    if (board.setFromTo(Pieces.MAN_TAG, new Coordinate(recordX, recordY))){
+                            // set the mPath and mMoveAndAttack values
+                        board.tryToMove();
+                    }
+                }
+            }
+        }
+
+        // DISPLAY/ UNDISPLAY the Pieces
+        if (fx >= SCREEN_WIDTH / 2.0f  - PIECE_WIDTH / 2.0f && fx <=  SCREEN_WIDTH / 2.0f  + PIECE_WIDTH / 2.0f
+                && fy >= SCREEN_HEIGHT / 2.0f  - PIECE_HEIGHT / 2.0f && fy <=  SCREEN_HEIGHT / 2.0f  + PIECE_HEIGHT / 2.0f){
+            gameThread.changeShowTitle();
+        }
+
+
+        return true;
+    }
+
+    @Override
+    public void onShowPress(MotionEvent motionEvent) {
+
+    }
+
+    @Override
+    public boolean onSingleTapUp(MotionEvent motionEvent) {
+        return false;
+    }
+
+    @Override
+    public boolean onScroll(MotionEvent motionEvent, MotionEvent motionEvent1, float v, float v1) {
+        return false;
+    }
+
+    @Override
+    public void onLongPress(MotionEvent event) {
+        float fx = event.getX();
+        float fy = event.getY();
+        int recordX = -1, recordY = -1; // x,y coordinate on the board from motion event
+        // Convert from motionEvent x,y to the board coordinate
+        for (int y = 0; y < Board.BOARD_HEIGHT; y++) {
+            for (int x = 0; x < Board.BOARD_WIDTH; x++) {
+                int tmpy = y < 6 ? (y+1) : (y+2);
+                if (fx >=  X_OFFSET + RECT_WIDTH / 2.0f + x* RECT_WIDTH - PIECE_WIDTH / 2.0f
+                        && fx <=  X_OFFSET + RECT_WIDTH / 2.0f + x* RECT_WIDTH + PIECE_WIDTH / 2.0f ){
+                    recordX = x;
+                }
+                if (fy >= Y_OFFSET + tmpy * RECT_HEIGHT - PIECE_HEIGHT / 2.0f
+                        && fy <= Y_OFFSET + tmpy * RECT_HEIGHT + PIECE_HEIGHT / 2.0f ){
+                    recordY = y;
+                }
+            }
+        }
+
+        if (whosTurn == Pieces.MAN_TAG) {
+            if (recordX != -1 && recordY != -1) {
+                byte currChess = board.getBoardArea()[recordY][recordX];
+                String name = Pieces.pieceTitle(currChess);
+                if (!name.substring(0,2).equals("AI")) {
+                    Pair p = order.get(name);
+                    String title = p.name;
+                    int level = p.order;
+                    Toast toast = Toast.makeText(getContext(), title + " " + level, Toast.LENGTH_SHORT);
+                    toast.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL, XPOS, YPOS);
+                    toast.show();
+                }
+            }
+        }
+    }
+
+    @Override
+    public boolean onFling(MotionEvent motionEvent, MotionEvent motionEvent1, float v, float v1) {
+        return false;
+    }
+
+
+
+
     /**
      *
      */
     public boolean onTouchEvent(MotionEvent event) {
-        float fx = event.getX();
-        float fy = event.getY();
-        int recordX = -1, recordY = -1; // x,y coordinate on the board from motion event
-
-        if (event.getAction() == MotionEvent.ACTION_DOWN){
-            if (gameThread.getMode() == GameThread.STATE_RUNNING) {
-                // Convert from motionEvent x,y to the board coordinate
-                for (int y = 0; y < Board.BOARD_HEIGHT; y++) {
-                    for (int x = 0; x < Board.BOARD_WIDTH; x++) {
-                        int tmpy = y < 6 ? (y+1) : (y+2);
-                        if (fx >=  X_OFFSET + RECT_WIDTH / 2.0f + x* RECT_WIDTH - PIECE_WIDTH / 2.0f
-                                && fx <=  X_OFFSET + RECT_WIDTH / 2.0f + x* RECT_WIDTH + PIECE_WIDTH / 2.0f ){
-                            recordX = x;
-                        }
-                        if (fy >= Y_OFFSET + tmpy * RECT_HEIGHT - PIECE_HEIGHT / 2.0f
-                                && fy <= Y_OFFSET + tmpy * RECT_HEIGHT + PIECE_HEIGHT / 2.0f ){
-                            recordY = y;
-                        }
-                    }
-                }
-                // Log.d(this.getClass().getName(), "Motion Event X,Y coordinate: " + String.valueOf(recordX) + "," + String.valueOf(recordY));
-
-                if (whosTurn == Pieces.MAN_TAG){
-                    // Valid x,y coordinate on the board
-                    if (recordX != -1 && recordY != -1) {
-                        if (board.setFromTo(Pieces.MAN_TAG, new Coordinate(recordX, recordY))){
-                            // set the mPath and mMoveAndAttack values
-                            board.tryToMove();
-                        }
-                    }
-                }
-            }
-
-            // DISPLAY/ UNDISPLAY the Pieces
-            if (fx >= SCREEN_WIDTH / 2.0f  - PIECE_WIDTH / 2.0f && fx <=  SCREEN_WIDTH / 2.0f  + PIECE_WIDTH / 2.0f
-                    && fy >= SCREEN_HEIGHT / 2.0f  - PIECE_HEIGHT / 2.0f && fy <=  SCREEN_HEIGHT / 2.0f  + PIECE_HEIGHT / 2.0f){
-                gameThread.changeShowTitle();
-            }
-
+        if (this.mDetector.onTouchEvent(event)) {
+            return true;
         }
-        return true;
+        return super.onTouchEvent(event);
     }
 
     public Board getBoard() {
@@ -730,7 +920,7 @@ public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback 
         }
     }
 
-    public int getWhosTurn() {
+    public static int getWhosTurn() {
         return whosTurn;
     }
 
@@ -746,3 +936,6 @@ public class LuZhanQiView extends SurfaceView implements SurfaceHolder.Callback 
     }
 
 }
+
+
+

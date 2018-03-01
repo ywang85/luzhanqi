@@ -3,9 +3,11 @@ package com.example.wyj.luzhanqi;
 import android.app.Activity;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -41,9 +43,9 @@ public class LuZhanQiActivity extends AppCompatActivity {
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
 
         // get handles to the LunarView from XML, and its LunarThread
-        lzqView = (LuZhanQiView) findViewById(R.id.luzhanqi_view);
+        lzqView = findViewById(R.id.luzhanqi_view);
         gameThread = lzqView.getGameThread();
-        lineupListview = (ListView) findViewById(R.id.lineup_listview);
+        lineupListview = findViewById(R.id.lineup_listview);
         lineupListview.setVisibility(View.INVISIBLE);
         // getLineupListviewData();
         lineupListview.setOnItemClickListener(new AdapterView.OnItemClickListener() {
@@ -53,6 +55,7 @@ public class LuZhanQiActivity extends AppCompatActivity {
                 onItemClickP (position);
             }
         });
+
     }
 
     @Override
@@ -78,12 +81,9 @@ public class LuZhanQiActivity extends AppCompatActivity {
             case R.id.restart_item:
                 gameThread.restartGame();
                 return true;
-            case R.id.about_item:
-                showAbout();
-                return true;
-            case R.id.quit_item:
-                quit();
-                return true;
+            case android.R.id.home:
+                gameThread.setSurfaceReady(false);
+                finish();
             default:
                 return super.onOptionsItemSelected(item);
         }
@@ -144,6 +144,14 @@ public class LuZhanQiActivity extends AppCompatActivity {
             }
         }
         lineupListview.setVisibility(View.INVISIBLE);
+    }
+
+    public void gameEnd() {
+        if (gameThread.getMode() == LuZhanQiView.GameThread.STATE_WIN) {
+            Toast.makeText(this, "You win", Toast.LENGTH_LONG).show();
+        } else if (gameThread.getMode() == LuZhanQiView.GameThread.STATE_LOSE){
+            Toast.makeText(this, "You lose", Toast.LENGTH_LONG).show();
+        }
     }
 
     /**
@@ -233,34 +241,9 @@ public class LuZhanQiActivity extends AppCompatActivity {
      * @param fname
      * @return
      */
-    public boolean fileExistance(String fname){
+    public boolean fileExistance(String fname) {
         File file = getBaseContext().getFileStreamPath(fname);
         return file.exists();
-    }
-    /**
-     * Show the "About" dialog
-     */
-    private void showAbout() {
-        StringBuffer sb = new StringBuffer();
-        sb.append(getText(R.string.app_name));
-        sb.append(getText(R.string.app_ver));
-        sb.append("\n");
-        sb.append(getText(R.string.app_author));
-        sb.append("\n");
-        sb.append(getText(R.string.about_info));
-        AlertDialog.Builder builder = new AlertDialog.Builder(
-                LuZhanQiActivity.this);
-
-        builder.setTitle(getText(R.string.about))
-                .setMessage(sb.toString())
-                .setNegativeButton(getText(R.string.ok),
-                        new DialogInterface.OnClickListener() {
-                            public void onClick(DialogInterface dialog, int id) {
-                                dialog.cancel();
-                            }
-                        });
-        AlertDialog alert = builder.create();
-        alert.show();
     }
 
     public int getSaveShow() {
@@ -269,33 +252,6 @@ public class LuZhanQiActivity extends AppCompatActivity {
 
     public void setSaveShow(int saveShow) {
         this.saveShow = saveShow;
-    }
-
-    /**
-     * Exit the game
-     */
-    private void quit() {
-        // Quick quit
-        LuZhanQiActivity.this.finish();
-		/*
-		AlertDialog.Builder builder = new AlertDialog.Builder(
-				LuZhanQiActivity.this);
-		builder.setMessage(getText(R.string.quit_confirmation));
-		builder.setPositiveButton(getText(R.string.ok),
-				new DialogInterface.OnClickListener() {
-					public void onClick(DialogInterface dialog, int which) {
-						dialog.dismiss();
-						LuZhanQiActivity.this.finish();
-					}
-				});
-		builder.setNegativeButton(getText(R.string.cancel),
-				new DialogInterface.OnClickListener() {
-					public void onClick(DialogInterface dialog, int which) {
-						dialog.dismiss();
-					}
-				});
-		builder.show();
-		*/
     }
 
     /**
