@@ -3,11 +3,11 @@
     <item android:id="@+id/start_game_item"
         android:title="@string/start_game" />
 
-    <item android:id="@+id/callin_lineup_item"
-        android:title="@string/callin_lineup" />
+    <item android:id="@+id/show_board"
+        android:title="@string/show_board"/>
 
-    <item android:id="@+id/save_lineup_item"
-        android:title="@string/save_lineup" />
+    <item android:id="@+id/explain"
+        android:title="@string/explain"/>
 
     <item android:id="@+id/restart_item"
         android:title="@string/restart" />

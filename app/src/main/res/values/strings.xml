@@ -26,5 +26,8 @@
     <string name="blank_info"></string>
     <string name="result">Results:</string>
     <string name="title_activity_main">MainActivity</string>
+    <string name="show_board">show board</string>
+    <string name="show_rules">show rules</string>
+    <string name="explain">detailed explaination</string>
 
 </resources>
