@@ -29,5 +29,7 @@
     <string name="show_board">show board</string>
     <string name="show_rules">show rules</string>
     <string name="explain">detailed explaination</string>
+    <string name="finish">OK</string>
+    <string name="show_hide_title">show/hide title</string>
 
 </resources>

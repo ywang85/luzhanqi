@@ -1,13 +1,14 @@
 package com.example.wyj.luzhanqi.game;
 
-import android.util.Log;
-
 import com.example.wyj.luzhanqi.LuZhanQiView;
 import com.example.wyj.luzhanqi.game.ai.Movement;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.PriorityQueue;
 import java.util.Vector;
 
 /**
@@ -17,704 +18,557 @@ import java.util.Vector;
 public class Board implements Cloneable{
     public static String chessName = "";
     private byte killed = 0;
-    // Array Size of the board
-    public static final int BOARD_WIDTH = 5;
-    public static final int BOARD_HEIGHT = 12;
-    public static final byte INVALID_BOARD_TAG = 0x00;
-    // STATIONS - 大本营，行营，兵站 （分公路上的和铁路上的）
+
+    public static final int BOARD_COLUMN = 5;
+    public static final int BOARD_ROW = 12;
+    public static final byte EMPTY = 0x00;
+
     public static final byte HEADQUARTER = 0x71;
     public static final byte CAMP = 0x72;
-    public static final byte STATION_ROAD = 0x73;
-    public static final byte STATION_RAILWAY = 0x74;
-    // the default line-up file length: 50 bytes
-    public static final int LINEUP_FILE_BYTE_LENGTH = 50;
-    // move and attack result
-    public static final int INVALID_MOTION = 1000;
+    public static final byte ROAD_STATION = 0x73;
+    public static final byte RAILWAY_STATION = 0x74;
+
+    public static final int TotalChessNum = 50;
+
+    public static final int INVALID_MOVE = 1000;
     public static final int MOVE = 1001;
-    public static final int KILL = 1002;
-    public static final int EQUAL = 1003;
-    public static final int KILLED = 1004;
-    public static final int MAN_LOST = 1005;
-    public static final int AI_LOST = 1006;
-    // public static final int GAME_OVER = 1006;
+    public static final int RANK_HIGHER = 1002;
+    public static final int RANK_SAME = 1003;
+    public static final int RANK_LOWER = 1004;
+    public static final int PLAYER_LOSE = 1005;
+    public static final int AI_LOSE = 1006;
 
-    // all the stations
-    private final byte[][] stations = new byte[BOARD_HEIGHT][BOARD_WIDTH];
-    // Array of the board
-    private byte[][] boardArea = new byte[BOARD_HEIGHT][BOARD_WIDTH];
-    // it's for A* path finding
-    private ArrayList<Coordinate> openList, closedList;
-    // For update physics (update board)
-    private Vector<Coordinate> mPath = null;
-    private Coordinate from = null, to = null; 	// on touch event
-    private Coordinate from0 = null, to0 = null; // last from and to, to draw the red tag
+
+
+    private byte[][] checkerboard = new byte[BOARD_ROW][BOARD_COLUMN];
+
+    private final byte[][] stations = new byte[BOARD_ROW][BOARD_COLUMN];
+
+    private PriorityQueue<Point> openList;
+    private ArrayList<Point> closedList;
+
+    private Vector<Point> paths;
+    private Point touch_start;
+    private Point touch_end; 	// on touch event
+    private Point start;
+    private Point end; // last touch_start and touch_end, touch_end draw the red tag
     private int curStep = 0;
-    private int moveAndAttackResult ;
-    private byte mSourcePiece;
+    private int actionType;
+    private byte currChess;
 
-    // Constructor
-    public Board() {
 
-    }
-
-    /**
-     * Initiate the board
-     */
     public void initBoard() {
-        for (int y = 0; y < BOARD_HEIGHT; y++) {
-            for (int x = 0; x < BOARD_WIDTH; x++) {
-                // pieces
-                boardArea[y][x] = INVALID_BOARD_TAG;
-                // stations
-                if ((y == 0 || y == 11) && (x == 1 || x == 3)) {
-                    stations[y][x] = HEADQUARTER;
-                } else if ((y == 2 || y == 4 || y == 7 || y == 9)
-                        && (x == 1 || x == 3) || (y == 3 || y == 8) && x == 2) {
-                    stations[y][x] = CAMP;
-                } else if (y == 1 || y == 5 || y == 6 || y == 10 || x == 0
-                        && y != 0 && y != 11 || x == 4 && y != 0 && y != 11) {
-                    stations[y][x] = STATION_RAILWAY;
+        for (int x = 0; x < BOARD_ROW; x++) {
+            for (int y = 0; y < BOARD_COLUMN; y++) {
+                checkerboard[x][y] = EMPTY;
+                if ((x == 0 || x == 11) && (y == 1 || y == 3)) {
+                    stations[x][y] = HEADQUARTER;
+                } else if ((x == 2 || x == 4 || x == 7 || x == 9)
+                        && (y == 1 || y == 3) || (x == 3 || x == 8) && y == 2) {
+                    stations[x][y] = CAMP;
+                } else if (x == 1 || x == 5 || x == 6 || x == 10 || y == 0
+                        && x != 0 && x != 11 || y == 4 && x != 0 && x != 11) {
+                    stations[x][y] = RAILWAY_STATION;
                 } else {
-                    stations[y][x] = STATION_ROAD;
+                    stations[x][y] = ROAD_STATION;
                 }
             }
         }
 
-        mPath = null;
-        from = to = from0 = to0 = null;
+        paths = null;
+        touch_start = null;
+        touch_end = null;
+        start = null;
+        end = null;
         curStep = 0;
-        mSourcePiece = INVALID_BOARD_TAG;
-        moveAndAttackResult = INVALID_MOTION;
+        currChess = EMPTY;
+        actionType = INVALID_MOVE;
     }
 
-    /**
-     * Load all the pieces before the game.
-     * @param located, 0 - game player, 1: the computer
-     * @param is, reads from such as res/raw/lineup_xxxxx.jql
-     */
-    public boolean loadPieces (int located, InputStream is) {
-        if (is == null) {
+
+    public boolean loadChess(int location, InputStream inputstream) {
+        if (inputstream == null) {
             return false;
         }
 
-        byte[] bytes = new byte[LINEUP_FILE_BYTE_LENGTH];
+        byte[] bytes = new byte[TotalChessNum];
         int x = 0 , y = 0 ;
         try {
-            is.read(bytes, 0, LINEUP_FILE_BYTE_LENGTH);
+            inputstream.read(bytes, 0, TotalChessNum);
         } catch (IOException e) {
             e.printStackTrace();
-            Log.e(this.getClass().getName(), "Read Lineup File Error!");
         }
 
-        for (int i = 20; i < bytes.length; i++) {	// ignore the first 20 bytes
-            if (bytes[i] != INVALID_BOARD_TAG) {
-                if (located == Pieces.MAN_TAG) {
-                    x = (i - 20) % 5;
-                    y = 6 + (i - 20) / 5;
-                    boardArea[y][x] = bytes[i];
-                }else if (located == Pieces.AI_TAG) {
+        for (int i = 20; i < bytes.length; i++) {
+            if (bytes[i] != EMPTY) {
+                if (location == Chess.PLAYER) {
+                    x = (i - 20) % 5; // 0, 1, 2, 3, 4
+                    y = 6 + (i - 20) / 5; // 6 -> 7 -> 8 -> 9 -> 10
+                    checkerboard[y][x] = bytes[i];
+                } else if (location == Chess.AI) {
                     x = 4 - (i - 20) % 5;
                     y = 5 - (i - 20) / 5;
-                    boardArea[y][x] = (byte) ((int) bytes[i] + 0x10);
+                    checkerboard[y][x] = (byte) ((int) bytes[i] + 0x10);
                 }
             }
         }
         return true;
     }
 
-    /**
-     * Get a copy of board[][]
-     */
-    public byte[][] newCopyOfBoard() {
-        byte[][] b = new byte[BOARD_HEIGHT][BOARD_WIDTH];
-        for (int y = 0; y < BOARD_HEIGHT; y++) {
-            for (int x = 0; x < BOARD_WIDTH; x++) {
-                b[y][x] =boardArea[y][x] ;
+
+
+    public byte[][] CloneBoard() {
+        byte[][] copy = new byte[BOARD_ROW][BOARD_COLUMN];
+        for (int x = 0; x < BOARD_ROW; x++) {
+            for (int y = 0; y < BOARD_COLUMN; y++) {
+                copy[x][y] = checkerboard[x][y] ;
             }
         }
-        return b;
+        return copy;
     }
 
-    /**
-     * Recover the board
-     */
-    public void recoverBoard(byte[][] b) {
-        for (int y = 0; y < BOARD_HEIGHT; y++) {
-            for (int x = 0; x < BOARD_WIDTH; x++) {
-                boardArea[y][x] = b[y][x];
+
+    public void undo(byte[][] copy) {
+        for (int x = 0; x < BOARD_ROW; x++) {
+            for (int y = 0; y < BOARD_COLUMN; y++) {
+                if (checkerboard[x][y] != copy[x][y]) {
+                    checkerboard[x][y] = copy[x][y];
+                }
             }
         }
     }
 
-    /**
-     * Validate the X, Y on the board array
-     * @param x
-     * @param y
-     * @return
-     */
-    public boolean validXY ( int x, int y) {
-        return x >=0 && x < BOARD_WIDTH && y >=0 && y < BOARD_HEIGHT;
-    }
-
-    public boolean validYX ( int y, int x) {
-        return validXY(x, y);
+    public boolean validXY (int x, int y) {
+        if (x < 0 || x >= BOARD_COLUMN || y < 0 || y >= BOARD_ROW) {
+            return false;
+        }
+        return true;
     }
 
     public byte[][] getStations() {
         return stations;
     }
 
-    public byte[][] getBoardArea() {
-        return boardArea;
+    public byte[][] getCheckerboard() {
+        return checkerboard;
     }
 
-    public void setBoardArea(byte[][] boardArea) {
-        this.boardArea = boardArea;
+
+    public void resetTouchStartEnd(){
+        touch_start = null;
+        touch_end = null;
     }
 
-    public void clearFromTo(){
-        from = null;
-        to = null;
-    }
-
-    /**
-     * Set the from or to from the onTouchEvent
-     *
-     * @param c
-     */
-    public boolean setFromTo(int whosTurn, Coordinate c) {
-        if (from == null && whosTurn == Pieces.getLocated(boardArea[c.y][c.x])){ // 是人，从to到from->c
-            from = c;
-            to = null;
-            Log.d(this.getClass().getName(), from.x + " " + from.y + " case 1");
+    public boolean clickAndMove(int player, Point point) {
+        byte lastPos = checkerboard[point.y][point.x];
+        if (touch_start == null && player == Chess.getChessLocation(lastPos)){
+            touch_start = point;
+            touch_end = null;
             return true;
-        } else if (from == null && whosTurn != Pieces.getLocated(boardArea[c.y][c.x])){ // 不是人
-            to = null;
+        }
+        if (touch_start == null && player != Chess.getChessLocation(lastPos)){
+            touch_end = null;
             return false;
-        } else if (to == null) {
-            int x = from.x, y = from.y;
-            int x0 = c.x, y0 = c.y;
-            // Check if user changes the "from" selection
-            if (Pieces.sameLocation( boardArea[y0][x0], boardArea[y][x])){
-                from = c;
+        }
+        if (touch_end == null) {
+            byte currPos = checkerboard[touch_start.y][touch_start.x];
+            if (Chess.sameLocation(lastPos, currPos)){
+                touch_start = point;
             } else {
-                to = c;
+                touch_end = point;
             }
             return true;
-        } else {
-//             both are not null.
-            Log.e(this.getClass().getName(), "// both are not null. It's not allowed to come here!");
-            return false;
         }
+        return false;
     }
 
-
-
-    /**
-     * Try to move after path-finding
-     */
-    public void tryToMove() {
-        if (from == null || to == null) {
+    public void nextActionType() {
+        if (touch_start == null || touch_end == null) {
             return;
         }
-        // path finding
-        mPath = pathFinding(from.x, from.y, to.x, to.y);
-        if (mPath == null || mPath.size()<1) {
-//			Log.d(this.getClass().getName(), "Path is null!");
-            // reset from,to and mPath
-            from0 = from ;
-            to0 = to;
-            from = null;
-            to = null;
-            mPath = null;
+        paths = getPath(touch_start.x, touch_start.y, touch_end.x, touch_end.y);
+        if (paths == null || paths.size() < 1) {
+            start = touch_start;
+            end = touch_end;
+            touch_start = null;
+            touch_end = null;
+            paths = null;
             curStep = 0;
             return;
         }
-//		Log.d(this.getClass().getName(), "Path is found! Length: " + mPath.size());
-        // Move and attack
-        moveAndAttackResult = moveAndAttack(from.x, from.y, to.x, to.y);
-//		Log.d(this.getClass().getName(), "Move result: " + String.valueOf(moveAndAttackResult));
+
+        actionType = getActionType(touch_start.x, touch_start.y, touch_end.x, touch_end.y);
     }
 
-    /**
-     * move and/or attack on the board
-     *
-     * @return
-     */
-    private int moveAndAttack (int x0, int y0, int x, int y) {
-        // Validation
-        if (stations[y0][x0] == INVALID_BOARD_TAG || stations[y][x] == INVALID_BOARD_TAG
-                || boardArea[y0][x0] == INVALID_BOARD_TAG || boardArea[y][x] != INVALID_BOARD_TAG
-                && Pieces.sameLocation(boardArea[y0][x0], boardArea[y][x])) {
-            return INVALID_MOTION;
+
+    private int getActionType(int startX, int startY, int endX, int endY) {
+        // chess can not move if it's in the headquarter, if its path is surrounded by other chess, or move to the same location
+        if (stations[startY][startX] == EMPTY ||
+                stations[endY][endX] == EMPTY ||
+                checkerboard[startY][startX] == EMPTY ||
+                (checkerboard[endY][endX] != EMPTY &&
+                        Chess.sameLocation(checkerboard[startY][startX], checkerboard[endY][endX]))) {
+            return INVALID_MOVE;
         }
-        // Move only
-        if (boardArea[y][x] == INVALID_BOARD_TAG) {
+        // Move
+        if (checkerboard[endY][endX] == EMPTY) {
             return MOVE;
         }
         // Attack
-        if (Pieces.getPureType(boardArea[y][x]) == Pieces.FLAG_S) {
-            int locatedLost = Pieces.getLocated(boardArea[y][x]);
-            // One lost
-            return locatedLost > 0 ? AI_LOST:MAN_LOST;
-        } else if (Pieces.getPureType(boardArea[y0][x0]) == Pieces.BOMB_S
-                || Pieces.getPureType(boardArea[y][x]) == Pieces.BOMB_S) {
-            // Bomb
-            return EQUAL;
-        } else if (Pieces.getPureType(boardArea[y][x]) == Pieces.MINE_S) {
-            if (Pieces.getPureType(boardArea[y0][x0]) == Pieces.GONGBING_S) {
-                // Mine
-                return KILL;
+        if (Chess.getType(checkerboard[endY][endX]) == Chess.playerFlag) { // check whose flag is
+            int losePosition = Chess.getChessLocation(checkerboard[endY][endX]);
+            return losePosition > 0 ? AI_LOSE : PLAYER_LOSE;
+        } else if (Chess.getType(checkerboard[startY][startX]) == Chess.playerBomb
+                || Chess.getType(checkerboard[endY][endX]) == Chess.playerBomb) {
+            return RANK_SAME;
+        } else if (Chess.getType(checkerboard[endY][endX]) == Chess.playerMine) {
+            if (Chess.getType(checkerboard[startY][startX]) == Chess.playerEngineer) {
+                chessName = Chess.pieceTitle(Chess.playerMine);
+                return RANK_HIGHER;
             } else {
-                return KILLED;
+                chessName = Chess.pieceTitle(Chess.playerEngineer);
+                return RANK_LOWER;
             }
         } else {
-            // Soldiers
-            byte soldier0 = Pieces.getPureType(boardArea[y0][x0]);
-            byte soldier1 = Pieces.getPureType(boardArea[y][x]);
-            if (soldier0 < soldier1) {
-                if (LuZhanQiView.getWhosTurn() == Pieces.AI_TAG) {
-                    killed = soldier1;
-                    chessName = Pieces.pieceTitle(killed);
+            byte chessStart = Chess.getType(checkerboard[startY][startX]);
+            byte chessEnd = Chess.getType(checkerboard[endY][endX]);
+            if (chessStart < chessEnd) {
+                if (LuZhanQiView.getTurn() == Chess.AI) {
+                    killed = chessEnd;
+                    chessName = Chess.pieceTitle(killed);
                 }
-                return KILL;
-            } else if (soldier0 == soldier1) {
-                return EQUAL;
+                return RANK_HIGHER;
+            } else if (chessStart == chessEnd) {
+                return RANK_SAME;
             } else {
-                if (LuZhanQiView.getWhosTurn() == Pieces.MAN_TAG) {
-                    killed = soldier0;
-                    chessName = Pieces.pieceTitle(killed);
+                if (LuZhanQiView.getTurn() == Chess.PLAYER) {
+                    killed = chessStart;
+                    chessName = Chess.pieceTitle(killed);
                 }
-                return KILLED;
+                return RANK_LOWER;
             }
         }
     }
 
-    /**
-     * One move on the board; it's for AB search
-     * @param move
-     */
-    public void makeaMove (Movement move) {
+
+    public void takeAction(Movement move) {
         if (move == null){
             return ;
         }
-        Coordinate from = move.getStart();
-        Coordinate to = move.getEnd();
+        Point prev = move.getStart();
+        Point curr = move.getEnd();
 
-        int result = moveAndAttack(from.x, from.y, to.x, to.y);
+        int action = getActionType(prev.x, prev.y, curr.x, curr.y);
 
-        switch (result) {
+        switch (action) {
             case MOVE:
-            case KILL:
-            case AI_LOST:
-            case MAN_LOST:
-                boardArea[to.y][to.x] = boardArea[from.y][from.x];
-                boardArea[from.y][from.x] = INVALID_BOARD_TAG;
+            case RANK_HIGHER:
+            case AI_LOSE:
+            case PLAYER_LOSE:
+                checkerboard[curr.y][curr.x] = checkerboard[prev.y][prev.x];
+                checkerboard[prev.y][prev.x] = EMPTY;
                 break;
-            case EQUAL:
-                boardArea[to.y][to.x] = INVALID_BOARD_TAG;
-                boardArea[from.y][from.x] = INVALID_BOARD_TAG;
+            case RANK_SAME:
+                checkerboard[curr.y][curr.x] = EMPTY;
+                checkerboard[prev.y][prev.x] = EMPTY;
                 break;
-            case KILLED:
-                boardArea[from.y][from.x] = INVALID_BOARD_TAG;
+            case RANK_LOWER:
+                checkerboard[prev.y][prev.x] = EMPTY;
                 break;
         }
-
-
     }
 
 
-    /**
-     * Check if there is next step of the path
-     * @return
-     */
+
     public boolean hasNextStep(){
-        if (mPath == null || mPath.size()<1) {
+        if (paths == null || paths.size() == 0) {
             curStep = 0;
             return false;
         }
-        return curStep + 1 <= mPath.size();
+        if (curStep <= paths.size() - 1) {
+            return true;
+        }
+        return false;
     }
 
-    public boolean isLastStep(){
-        return curStep + 1 == mPath.size();
+    private boolean isLastStep(){
+        return curStep + 1 == paths.size();
     }
 
-    /**
-     * Refresh the board by moving a step
-     * @return false: no more nextSteps
-     */
+
     public boolean nextStep(){
-        // remove current step's board byte
         if (curStep <= 0) {
-            mSourcePiece = boardArea[from.y][from.x];
-            boardArea[from.y][from.x] = INVALID_BOARD_TAG;
+            currChess = checkerboard[touch_start.y][touch_start.x];
+            checkerboard[touch_start.y][touch_start.x] = EMPTY;
         } else {
-            Coordinate last = mPath.get(curStep-1);
-            boardArea[last.y][last.x] = INVALID_BOARD_TAG;
+            Point last = paths.get(curStep - 1);
+            checkerboard[last.y][last.x] = EMPTY;
         }
 
-        // move to a new step
         if (!isLastStep()) {
-            Coordinate next = mPath.get(curStep);
-            boardArea[next.y][next.x] = mSourcePiece;
+            Point next = paths.get(curStep);
+            checkerboard[next.y][next.x] = currChess;
             curStep++;
-            //Log.d(this.getClass().getName(), "Next step(), y & x: " + String.valueOf(next.y)+","+String.valueOf(next.x));
             return true;
         } else {
-            //Log.d(this.getClass().getName(), "Last step(), y & x: " + String.valueOf(to.y)+","+String.valueOf(to.x));
-            // to determine the target piece's destiny
-            switch (moveAndAttackResult) {
+            switch (actionType) {
                 case MOVE:
-                case KILL:
-                case AI_LOST:
-                case MAN_LOST:
-                    boardArea[to.y][to.x] = mSourcePiece;
+                case RANK_HIGHER:
+                case AI_LOSE:
+                case PLAYER_LOSE:
+                    checkerboard[touch_end.y][touch_end.x] = currChess;
                     break;
-                case EQUAL:
-                    boardArea[to.y][to.x] = INVALID_BOARD_TAG;
+                case RANK_SAME:
+                    checkerboard[touch_end.y][touch_end.x] = EMPTY;
                     break;
-                case KILLED:
+                case RANK_LOWER:
                     break;
             }
-            // reset from,to and mPath
-            from0 = from ;
-            to0 = to;
-            from = null;
-            to = null;
-            mPath = null;
+
+            start = touch_start;
+            end = touch_end;
+            touch_start = null;
+            touch_end = null;
+            paths = null;
             curStep = 0;
             return false;
         }
     }
 
-    /**
-     * Path finding
-     * @param x0
-     * @param y0
-     * @param x
-     * @param y
-     * @return Vector<Coordiante>  doesn't include the source
-     */
-    public Vector<Coordinate> pathFinding(int x0, int y0, int x, int y) {
+    public Vector<Point> getPath(int startX, int startY, int endX, int endY) {
         // No piece in x0,y0 or The pieces in HEADQUARTER and the mines can NOT move
-        if (boardArea[y0][x0]== INVALID_BOARD_TAG || stations[y0][x0] == HEADQUARTER
-                || Pieces.getPureType(boardArea[y0][x0]) == Pieces.MINE_S) {
+        if (checkerboard[startY][startX]== EMPTY
+                || stations[startY][startX] == HEADQUARTER
+                || Chess.getType(checkerboard[startY][startX]) == Chess.playerMine) {
             return null;
         }
         // Can not move to a camp which is occupied
-        if (stations[y][x] == CAMP && boardArea[y][x] != INVALID_BOARD_TAG) {
+        if (stations[endY][endX] == CAMP && checkerboard[endY][endX] != EMPTY) {
             return null;
         }
-        // Piece -> Piece which are belong to the same player
-        if (Pieces.sameLocation(boardArea[y0][x0], boardArea[y][x])) {
+        // move to the same location
+        if (Chess.sameLocation(checkerboard[startY][startX], checkerboard[endY][endX])) {
             return null;
         }
 
-        Coordinate beginning = new Coordinate(x0, y0);
-        Coordinate end = new Coordinate(x, y);
-        Vector<Coordinate> path = new Vector<Coordinate>();
+        Vector<Point> path = new Vector<>();
 
-        // Road station or Camp ( | - ) , move only 1 step
-        if (stations[y0][x0] == STATION_ROAD || stations[y][x] == STATION_ROAD
-                || stations[y0][x0] == CAMP || stations[y][x] == CAMP
-                || stations[y][x] == HEADQUARTER) {
-            if (roadAdjacent(x0, y0, x, y)) {
-                path.add(new Coordinate(x, y));
+
+        // if chess is on last row, or want to move to last row
+        // if chess is in camp or want to move to camp
+        // if chess wants to move to headquarter(chess can not move once it's in the headquarter)
+        // if only one step, add to path
+        if (stations[startY][startX] == ROAD_STATION
+                || stations[endY][endX] == ROAD_STATION
+                || stations[startY][startX] == CAMP
+                || stations[endY][endX] == CAMP
+                || stations[endY][endX] == HEADQUARTER) {
+            if (roadAdjacent(startX, startY, endX, endY)) {
+                path.add(new Point(endX, endY));
                 return path;
             }
         }
 
-        // Camp, move only 1 step (/ \)
-        if (stations[y0][x0] == CAMP || stations[y][x] == CAMP) {
-            if (campAdjacent(x0, y0, x, y)) {
-                path.add(new Coordinate(x, y));
+        // camp to camp, one step
+        if (stations[startY][startX] == CAMP
+                || stations[endY][endX] == CAMP) {
+            if (campAdjacent(startX, startY, endX, endY)) {
+                path.add(new Point(endX, endY));
                 return path;
             }
         }
+        // A*
+        AStar(startX, startY, endX, endY, path);
 
-        // on Railway, A* path finding
-        openList = new ArrayList<Coordinate>();
-        closedList = new ArrayList<Coordinate>();
-
-        if (stations[y0][x0] == STATION_RAILWAY	&& stations[y][x] == STATION_RAILWAY &&
-                (validRailwayRoad(x0, y0, x, y) || Pieces.getPureType(boardArea[y0][x0]) == Pieces.GONGBING_S)) {
-            ArrayList<Coordinate> adjacent = new ArrayList<Coordinate>();
-            boolean engineer = Pieces.getPureType(boardArea[y0][x0]) == Pieces.GONGBING_S;
-            Coordinate current = null;
-            openList.add(beginning);
-
-            do {
-                // Find the minimum F value Coordinate from the openList
-                current = lookForMinF(end);
-                openList.remove(current);
-                closedList.add(current);
-                // Get all adjacent XYs of current
-                adjacent = allAdjacents(beginning, current, end, engineer);
-                // logger.debug("All adjacent of current(" + current.value +
-                // ") = " + adjacent.size());
-
-                for (Coordinate adj : adjacent) { // Traverse all adjacent of
-                    // current Coordinate
-                    if (!closedListContains(adj)
-                            && (boardArea[adj.y][adj.x] == Pieces.INVALID || adj.equals(end))) {
-                        if (!openListContains(adj)) {
-                            adj.parent = current;
-                            openList.add(adj);
-                        } else {
-                            if (getCostG(current.parent, current)
-                                    + getCostG(current, adj) < getCostG(
-                                    current.parent, adj)) {
-                                adj.parent = current;
-                            }
-                        }
-                    }
-                }
-            } while (!openListContains(end) && openList.size() > 0);
-            end.parent = current;
-
-            if (openListContains(end)) { // Find the path
-                Coordinate t = end;
-                while (t != beginning) {
-                    path.add(t);
-                    t = t.parent;
-                }
-            }
-        }
-
-        // Convert the path array
-        for (int i = path.size() - 1; i > (path.size() - 1) / 2; i--) {
-            Coordinate tmp = path.get(i);
-            path.set(i, path.get(path.size() - 1 - i));
-            path.set(path.size() - 1 - i, tmp);
-        }
+        Collections.reverse(path);
         return path;
     }
 
-    /**
-     * Get the adjacent points of current
-     */
-    private ArrayList<Coordinate> allAdjacents(Coordinate beginning,
-                                               Coordinate current, Coordinate end, boolean engineer) {
-        ArrayList<Coordinate> adjacent = new ArrayList<Coordinate>();
+
+    private void AStar(int startX, int startY, int endX, int endY, Vector<Point> path) {
+
+        Point startNode = new Point(startX, startY);
+        final Point end = new Point(endX, endY);
+        openList = new PriorityQueue<>(1000, new Comparator<Point>() {
+            @Override
+            public int compare(Point point, Point t1) {
+                return gScore(point.parent, point) + heuristics(point, end) - gScore(t1.parent, t1) + heuristics(t1, end);
+            }
+        });
+        closedList = new ArrayList<>();
+
+        if (stations[startY][startX] == RAILWAY_STATION && stations[endY][endX] == RAILWAY_STATION &&
+                (validRailwayRoad(startX, startY, endX, endY) || Chess.getType(checkerboard[startY][startX]) == Chess.playerEngineer)) {
+            ArrayList<Point> adjacent;
+            boolean engineer = Chess.getType(checkerboard[startY][startX]) == Chess.playerEngineer;
+            Point current = null;
+            openList.add(startNode);
+
+            while (!openListContains(end) && openList.size() > 0) {
+                current = openList.poll();
+                closedList.add(current);
+
+                adjacent = getNeighbors(current, end, engineer);
+                for (Point adj : adjacent) {
+                    if (closedListContains(adj) || (checkerboard[adj.y][adj.x] != Chess.INVALID && !adj.equals(end))) {
+                        continue;
+                    }
+                    if (!openListContains(adj)) {
+                        adj.parent = current;
+                        openList.add(adj);
+                    } else {
+                        if (gScore(current.parent, current) + gScore(current, adj) < gScore(current.parent, adj)) {
+                            adj.parent = current;
+                        }
+                    }
+                }
+            }
+            end.parent = current;
+
+            if (openListContains(end)) { // Find the path
+                Point tmp = end;
+                while (tmp != startNode) {
+                    path.add(tmp);
+                    tmp = tmp.parent;
+                }
+            }
+        }
+    }
+
+    private boolean isCamp(Point p) {
+        if (((p.y == 5) && (p.x == 1) ||
+                (p.y == 5) && (p.x == 3) ||
+                (p.y == 6) && (p.x == 1) ||
+                (p.y == 6) && (p.x == 3))) {
+            return true;
+        }
+        return false;
+    }
+
+    private ArrayList<Point> getNeighbors(Point current, Point end, boolean engineer) {
+        ArrayList<Point> neighbors = new ArrayList<>();
 
         if (engineer) {
+            // get four direction of the chess
             for (int i = -1; i <= 1; i += 2) {
-                if (validYX(current.y + i, current.x) &&
-                        stations[current.y + i][current.x] == STATION_RAILWAY) {
-                    if(!((current.y ==5) && (current.x == 1)
-                            ||(current.y ==5) && (current.x == 3)
-                            ||(current.y ==6) && (current.x == 1)
-                            ||(current.y ==6) && (current.x == 3))
-                            ){
-                        adjacent.add(new Coordinate(current.x, current.y + i));
+                // check for column
+                if (validXY(current.x, current.y + i) &&
+                        stations[current.y + i][current.x] == RAILWAY_STATION) {
+                    if (!isCamp(current)) {
+                        neighbors.add(new Point(current.x, current.y + i));
                     }
                 }
-                if (validYX(current.y , current.x+i) &&
-                        stations[current.y][current.x + i] == STATION_RAILWAY) {
-                    adjacent.add(new Coordinate(current.x + i, current.y));
+                // check for row
+                if (validXY(current.x + i, current.y) &&
+                        stations[current.y][current.x + i] == RAILWAY_STATION) {
+                    neighbors.add(new Point(current.x + i, current.y));
                 }
             }
-        } else { // Not the engineer
-            for (int i = -1; i <= 1; i += 2) { // The beginning and end are on
-                // the same row/column
-                if (current.x == end.x
-                        && validYX(current.y + i, current.x)
-                        && stations[current.y + i][current.x] == STATION_RAILWAY) {
-                    if(!((current.y ==5) && (current.x == 1)
-                            ||(current.y ==5) && (current.x == 3)
-                            ||(current.y ==6) && (current.x == 1)
-                            ||(current.y ==6) && (current.x == 3))
-                            ){
-                        adjacent.add(new Coordinate(current.x, current.y + i));
+        } else {
+            for (int i = -1; i <= 1; i += 2) {
+                // same row
+                if (current.x == end.x && validXY(current.x, current.y + i)
+                        && stations[current.y + i][current.x] == RAILWAY_STATION) {
+                    if (!isCamp(current)){
+                        neighbors.add(new Point(current.x, current.y + i));
                     }
                 }
-                if (current.y == end.y
-                        && validYX(current.y , current.x+i)
-                        && stations[current.y][current.x + i] == STATION_RAILWAY) {
-                    adjacent.add(new Coordinate(current.x + i, current.y));
+                // same column
+                if (current.y == end.y && validXY(current.x + i, current.y) &&
+                        stations[current.y][current.x + i] == RAILWAY_STATION) {
+                    neighbors.add(new Point(current.x + i, current.y));
                 }
             }
         }
-        return adjacent;
+        return neighbors;
     }
 
-    /**
-     * True if openList contains the target
-     */
-    private boolean openListContains(Coordinate target) {
-        for (Coordinate c : openList) {
-            if (c.equals(target))
+    private boolean openListContains(Point target) {
+        for (Point p : openList) {
+            if (p.equals(target))
                 return true;
         }
         return false;
     }
 
-    /**
-     * True if closedList contains the target
-     */
-    private boolean closedListContains(Coordinate target) {
-        for (Coordinate c : closedList) {
-            if (c.equals(target))
+    private boolean closedListContains(Point target) {
+        for (Point p : closedList) {
+            if (p.equals(target))
                 return true;
         }
         return false;
     }
 
-    /**
-     * Look for the Coordinate that has the minimum F value from openList list
-     */
-    private Coordinate lookForMinF(Coordinate target) {
-        Coordinate c = openList.get(0);
-        for (int i = 1; i < openList.size(); i++) {
-            Coordinate tmp = openList.get(i);
-            if (getCostG(tmp.parent, tmp) + getDistanceH(tmp, target) < getCostG(
-                    c.parent, c) + getDistanceH(c, target)) {
-                c = tmp;
-            }
-        }
-        return c;
-    }
 
-    /**
-     * The G function - cost from c0 to c1
-     */
-    private int getCostG(Coordinate c0, Coordinate c1) {
-        // c.parent compare to c, if c is the beginning, then c.parent is NULL
-        if (c0 == null || c1 == null) {
+    // g(n)
+    private int gScore(Point curr, Point goal) {
+        if (curr == null || goal == null) {
             return 0;
         }
 
         // Validation
-        if (stations[c0.y][c0.x] == Pieces.INVALID
-                || stations[c1.y][c1.x] == Pieces.INVALID) {
+        if (stations[curr.y][curr.x] == Chess.INVALID
+                || stations[goal.y][goal.x] == Chess.INVALID) {
             return Integer.MAX_VALUE;
         }
 
-        if (c0.x == c1.x || c0.y == c1.y) {
-            return Math.abs(c0.x - c1.x) * 10 + Math.abs(c0.y - c1.y) * 10;
-        } else if (Math.abs(c0.x - c1.x) == 1 && Math.abs(c0.y - c1.y) == 1) {
+        if (curr.x == goal.x || curr.y == goal.y) { // move horizontal or move vertical, cost 10
+            return Math.abs(curr.x - goal.x) * 10 + Math.abs(curr.y - goal.y) * 10;
+        } else if (Math.abs(curr.x - goal.x) == 1 && Math.abs(curr.y - goal.y) == 1) { // move diagonal, cost sqrt(10^2 + 10^2) = 14
             return 14;
-        } else {
+        } else { // invalid move
             return Integer.MAX_VALUE;
         }
     }
 
-    /**
-     * The H function - Manhattan distance from x0,y0 to x,y
-     */
-    private int getDistanceH(int x0, int y0, int x, int y) {
-        return (Math.abs(x0 - x) + Math.abs(y0 - y)) * 10;
-    }
-    /**
-     * The H function - Manhattan distance from c0 to c1
-     */
-    private int getDistanceH(Coordinate c0, Coordinate c1) {
-        return getDistanceH(c0.x, c0.y, c1.x, c1.y);
+
+    //  h(n) Manhattan distance
+    private int heuristics(Point curr, Point goal) {
+        return (Math.abs(curr.x - goal.x) + Math.abs(curr.y - goal.y)) * 10;
     }
 
-    /**
-     * Road adjacent
-     */
-    private boolean roadAdjacent(int x0, int y0, int x, int y) {
-        return x0 == x && Math.abs(y0 - y) == 1 || y0 == y && Math.abs(x0 - x) == 1;
+    private boolean roadAdjacent(int currX, int currY, int nextX, int nextY) {
+        return currX == nextX && Math.abs(currY - nextY) == 1 || currY == nextY && Math.abs(currX - nextX) == 1;
     }
-    /**
-     * Camp adjacent
-     */
-    private boolean campAdjacent(int x0, int y0, int x, int y) {
-        return Math.abs(x0 - x) == 1 && Math.abs(y0 - y) == 1;
-    }
-    /**
-     * Valid railway road
-     */
-    private boolean validRailwayRoad(int x0, int y0, int x, int y) {
-        return x0 == x 	|| y0 == y;
 
-		/*
-		 return  x0 == x && ( x == 0 || x == 4 || x == 2 && y >= 5 && y <=6)
-			||  y0 == y && (y == 1 || y == 5 || y == 6 || y == 10);
-		*/
+    private boolean campAdjacent(int currX, int currY, int nextX, int nextY) {
+        return Math.abs(currX - nextX) == 1 && Math.abs(currY - nextY) == 1;
+    }
+
+    private boolean validRailwayRoad(int startX, int startY, int endX, int endY) {
+        return startX == endX || startY == endY;
     }
 
 
-    public Coordinate getFrom() {
-        return from;
+    public Point getTouch_start() {
+        return touch_start;
     }
 
-    public void setFrom(Coordinate from) {
-        this.from = from;
+
+    public Point getTouch_end() {
+        return touch_end;
     }
 
-    public Coordinate getTo() {
-        return to;
+
+    public Point getStart() {
+        return start;
     }
 
-    public void setTo(Coordinate to) {
-        this.to = to;
+
+    public Point getEnd() {
+        return end;
     }
 
-    public Coordinate getFrom0() {
-        return from0;
+
+    public int getActionType() {
+        return actionType;
     }
 
-    public void setFrom0(Coordinate from0) {
-        this.from0 = from0;
-    }
-
-    public Coordinate getTo0() {
-        return to0;
-    }
-
-    public void setTo0(Coordinate to0) {
-        this.to0 = to0;
-    }
-
-    public int getMoveAndAttackResult() {
-        return moveAndAttackResult;
-    }
-
-    public void setMoveAndAttackResult(int moveAndAttackResult) {
-        this.moveAndAttackResult = moveAndAttackResult;
-    }
-
-    /**
-     *
-     * @param args
-     */
-//    public static void main(String[] args) {
-//        Board b = new Board();
-//        b.printStations();
-//    }
-    /**
-     * test
-     */
-    private void printStations() {
-        for (int y = 0; y < BOARD_HEIGHT; y++) {
-            for (int x = 0; x < BOARD_WIDTH; x++) {
-                if (stations[y][x] == HEADQUARTER) {
-                    System.out.print("HA");
-                } else if (stations[y][x] == CAMP) {
-                    System.out.print("()");
-                } else if (stations[y][x] == STATION_RAILWAY) {
-                    System.out.print("==");
-                } else if (stations[y][x] == STATION_ROAD) {
-                    System.out.print("..");
-                }
-                System.out.print("   ");
-            }
-            System.out.print("\n");
-        }
-    }
-
-    /**
-     * Board object Clone for AB search
-     */
     public Object clone() {
         Board bclone = null;
         try {
             bclone = (Board) super.clone();
-            bclone.boardArea = this.newCopyOfBoard();
+            bclone.checkerboard = this.CloneBoard();
         } catch (CloneNotSupportedException e) {
             e.printStackTrace();
         }
