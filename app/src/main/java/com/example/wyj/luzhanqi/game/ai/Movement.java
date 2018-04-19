@@ -1,6 +1,6 @@
 package com.example.wyj.luzhanqi.game.ai;
 
-import com.example.wyj.luzhanqi.game.Point;
+import com.example.wyj.luzhanqi.game.Utils.Point;
 
 /**
  * Created by wyj on 2018/1/23.
@@ -35,6 +35,6 @@ public class Movement implements Comparable<Movement> {
     @Override
     public int compareTo(Movement movement) {
         Movement m = movement;
-        return m.getValue() - this.value;
+        return movement.value - this.value;
     }
 }

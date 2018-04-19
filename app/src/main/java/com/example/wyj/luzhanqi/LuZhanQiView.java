@@ -17,8 +17,8 @@ import android.widget.Toast;
 
 import com.example.wyj.luzhanqi.game.Board;
 import com.example.wyj.luzhanqi.game.Chess;
-import com.example.wyj.luzhanqi.game.Point;
-import com.example.wyj.luzhanqi.game.Pair;
+import com.example.wyj.luzhanqi.game.Utils.Point;
+import com.example.wyj.luzhanqi.game.Utils.Pair;
 import com.example.wyj.luzhanqi.game.ai.MinMaxThread;
 
 import java.util.HashMap;

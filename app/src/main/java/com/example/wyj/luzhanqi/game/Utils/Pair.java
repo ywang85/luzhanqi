@@ -1,4 +1,4 @@
-package com.example.wyj.luzhanqi.game;
+package com.example.wyj.luzhanqi.game.Utils;
 
 /**
  * Created by wyj on 2018/2/18.

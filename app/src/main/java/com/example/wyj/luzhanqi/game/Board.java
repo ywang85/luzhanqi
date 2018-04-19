@@ -1,6 +1,7 @@
 package com.example.wyj.luzhanqi.game;
 
 import com.example.wyj.luzhanqi.LuZhanQiView;
+import com.example.wyj.luzhanqi.game.Utils.Point;
 import com.example.wyj.luzhanqi.game.ai.Movement;
 
 import java.io.IOException;

@@ -17,7 +17,7 @@ import android.widget.Toast;
 
 import com.example.wyj.luzhanqi.game.Board;
 import com.example.wyj.luzhanqi.game.Chess;
-import com.example.wyj.luzhanqi.game.Point;
+import com.example.wyj.luzhanqi.game.Utils.Point;
 
 import java.io.InputStream;
 
